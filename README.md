@@ -3,11 +3,6 @@ Role Name
 
 Install or Upgrade redmine
 
-Requirements
-------------
-
-To Install:
-- ANXS.mysql
 
 Role Variables
 --------------
