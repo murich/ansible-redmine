@@ -1,8 +1,8 @@
 ---
 galaxy_info:
-  author: Aldo Vizcaino
+  author: Aldo Vizcaino, Andrii Murashkin
   description: "Install and Upgrade redmine"
-  company: Nomanod
+  company: phpteam.pro
   license: GPLv3
   min_ansible_version: 2.5
   platforms:
@@ -14,6 +14,4 @@ galaxy_info:
     - all
   categories:
   - development
-dependencies: 
-  - { role: ANXS.mysql }
   
