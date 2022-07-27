@@ -3,7 +3,11 @@
   include_vars: "{{ ansible_distribution }}.yml"
 
 - name: Package pre-requisites
-  ansible.builtin.package: name="{{ packages }}" state=latest
+  apt: name="{{ packages }}" state=latest
+  become: true
+
+- name: install ruby
+  shell: "rbenv global 2.6.10 || (rbenv install 2.6.10 && rbenv global 2.6.10)"
 
 - name: Backup database
   mysql_db: name="{{ db_name }}" login_host="{{ db_host }}" \
@@ -11,20 +15,20 @@
             login_password="{{ db_password }}" \
             state=dump target="{{ target_dump }}"
   when: update
-    
+
 - name: Clone repository
   git: repo=https://github.com/redmine/redmine.git dest="{{ redmine_path }}" version='{{ redmine_version }}' accept_hostkey=yes
 
 - name: Config database
   template: src=database.yml.j2 dest="{{ redmine_path }}/config/database.yml"
   when: not update
-  
-- name: Install Bundler
-  shell: "gem install bundler --version {{ redmine_bundler_version }}"
+
+- name: Install Gems
+  shell: "export GEM_HOME=~/.ruby/ && rbenv exec gem install bundler --version {{ redmine_bundler_version }} && rbenv exec gem install thin"
   args:
     chdir: "{{ redmine_path }}"
   when: not update
-  
+
 - name: Update Dependencies
   shell: bundle update
   args:
@@ -42,49 +46,75 @@
   args:
     chdir: "{{ redmine_path }}"
   when: update
-  
-- name: Dependencies installation
-  shell: bundle install --without development test
+
+- name: Bundle installation
+  shell: "rbenv exec bundle install"
   args:
     chdir: "{{ redmine_path }}"
   when: not update
-  
+
+- name: create a new database
+  mysql_db: name={{ db_name }} state=present login_user=root login_password="{{ mysql_root_password }}"
+  when: not update
+
+- name: create user for redmine
+  community.mysql.mysql_user:
+    state: present
+    name: "{{ db_username }}"
+    password: "{{ db_password }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    priv:
+      "{{ db_name }}.*:ALL,GRANT"
+
 - name: Session store secret generation
-  shell: rake generate_secret_token
+  shell: rbenv exec rake generate_secret_token
   args:
    chdir: "{{ redmine_path }}"
    creates: "{{ redmine_path }}/config/initializers/secret_token.rb"
   when: not update
-  
+
 # rails migrations are (supposed to be) idempotent
 - name: Database schema objects creation
-  shell: RAILS_ENV=production rake db:migrate
+  shell: RAILS_ENV=production rbenv exec rake db:migrate
   args:
    chdir: "{{ redmine_path }}"
   when: not update
-  
+
 - name: Database default data set
-  shell: RAILS_ENV=production REDMINE_LANG="{{ redmine_lang }}" rake redmine:load_default_data
+  shell: RAILS_ENV=production rbenv exec REDMINE_LANG="{{ redmine_lang }}" rake redmine:load_default_data
   args:
    chdir: "{{ redmine_path }}"
   when: not update and redmine_load_default_data|default(false)
 
 - name: Clean up cache
-  shell: bundle exec rake tmp:cache:clear
+  shell: rbenv exec bundle exec rake tmp:cache:clear
   args:
     chdir: "{{ redmine_path }}"
 
 - name: Clean up sessions
-  shell: bundle exec rake tmp:sessions:clear
+  shell: rbenv exec bundle exec rake tmp:sessions:clear
   args:
     chdir: "{{ redmine_path }}"
   when: redmine_version is version('4.0', '<')
 
+- name: Thin install
+  shell: sudo /home/ubuntu/.rbenv/shims/thin install
+  become: true
 
-- name: Copiar Proxy
+- name: Thin config
+  template: src=thin.j2 dest="/etc/thin/redmine.yml"
+  become: truex`
+
+- name: Thin run
+  shell: /etc/init.d/thin restart
+
+- name: Copy Proxy
   copy: src=proxy dest="{{ redmine_proxy }}"
   when: nginx
+  become: true
 
-- name: Configurar sitio
+- name: Configure nginx
   template: src=site.j2 dest="/etc/nginx/sites-available/redmine"
   when: nginx
+  become: true

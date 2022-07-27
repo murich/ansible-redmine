@@ -1,9 +1,7 @@
 packages:
   - git
   - imagemagick
-  - ruby-openid
-  - ruby
   - build-essential
-  - ruby-dev
+  - rbenv
   - libmagickwand-dev
   - "{{ 'libmariadbclient-dev' if ansible_distribution_version is version('9', '>=') else 'libmysqlclient-dev' }}"

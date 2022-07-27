@@ -1,0 +1,16 @@
+---
+pid: tmp/pids/thin.pid
+group: ubuntu
+wait: 30
+timeout: 30
+log: log/thin.log
+max_conns: 1024
+require: []
+
+environment: production
+max_persistent_conns: 512
+servers: 1
+daemonize: true
+user: ubuntu
+socket: /tmp/thin.sock
+chdir: {{ redmine_path }}
